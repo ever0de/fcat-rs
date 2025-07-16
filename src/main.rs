@@ -43,8 +43,10 @@ static IGNORE_SET: Lazy<GlobSet> = Lazy::new(|| {
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// The path to the target directory or file.
-    path: PathBuf,
+    /// The paths to the target directories or files.
+    /// Supports multiple paths and shell-expanded glob patterns (e.g., `src/**/*.rs`).
+    #[arg(required = true)]
+    paths: Vec<PathBuf>,
 
     /// A specific directory path to exclude from the search.
     ///
@@ -142,7 +144,9 @@ async fn main() -> eyre::Result<()> {
     };
 
     let mut reader_tasks = JoinSet::new();
-    reader_tasks.spawn(process_path_recursively(context, args.path, tx.clone()));
+    for path in args.paths {
+        reader_tasks.spawn(process_path_recursively(context.clone(), path, tx.clone()));
+    }
 
     while let Some(res) = reader_tasks.join_next().await {
         if let Err(e) = res {

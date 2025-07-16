@@ -1,6 +1,6 @@
 # fcat
 
-`fcat` is a command-line utility that recursively scans a directory or processes a single file and consolidates the contents of all found files into a single text file or directly to your clipboard.
+`fcat` is a command-line utility that recursively scans directories, processes files, and consolidates the contents of all found files into a single text file or directly to your clipboard.
 
 It's designed to make it easy to gather project context, create source code archives, or generate project overviews. Its primary use case is to quickly create a single context file that can be pasted into a prompt for a Large Language Model (LLM), providing the AI with the full context of a project.
 
@@ -32,14 +32,14 @@ Alternatively, you can build it from the source code:
 The basic command structure is simple:
 
 ```bash
-fcat [OPTIONS] <PATH>
+fcat [OPTIONS] <PATHS>...
 ```
 
 ### Arguments
 
 | Argument | Description                                                                                              |
 | -------- | -------------------------------------------------------------------------------------------------------- |
-| `<PATH>` | The path to the target directory or file. If a directory, scans recursively. If a file, processes only it. |
+| `<PATHS>...` | One or more paths to target directories or files. Supports shell-expanded glob patterns (e.g., `src/**/*.rs`). |
 
 ### Options
 
@@ -58,54 +58,43 @@ fcat [OPTIONS] <PATH>
 
 This is the most common use case. Run this command in your project's root directory. It will bundle the project's contents and copy the result directly to your clipboard.
 
-Just paste (`Ctrl+V` or `Cmd+V`) into your LLM prompt. No intermediate file needed.
-
-```bash
-fcat . --clipboard
-```
-
-*Short version:*
-
 ```bash
 fcat . -c
 ```
 
-**2. Generate an Output File**
+**2. Select Specific Files and Directories**
 
-If you prefer to save the context to a file, run `fcat .`. This will create a `bundler.txt` file in your current directory.
+You can specify multiple paths. For example, to bundle all files in the `src` directory and the `Cargo.toml` file:
+
+```bash
+fcat src Cargo.toml -c
+```
+
+**3. Use Glob Patterns to Select Files**
+
+Use your shell's globbing capabilities to select files with specific patterns. For example, to bundle all `.rs` files in the `src` directory and the `Cargo.toml` file:
+
+```bash
+fcat src/**/*.rs Cargo.toml -c
+```
+
+*(Note: Glob pattern behavior may vary slightly depending on your shell, e.g., zsh, bash.)*
+
+
+**4. Generate an Output File**
+
+If you prefer to save the context to a file, omit the `-c` or `--clipboard` flag. This command will create a `bundler.txt` file.
 
 ```bash
 fcat .
 ```
 
-**3. Bundle a Specific Directory or File**
-
-Bundle all files from the `src` directory and save the result to `source_code.txt`:
-
-```bash
-fcat ./src -o source_code.txt
-```
-
-Or, bundle only a single file:
-
-```bash
-fcat src/main.rs -o main_only.txt
-```
-
-**4. Exclude an Additional Directory**
+**5. Exclude an Additional Directory**
 
 Bundle the project but also ignore the `docs` folder, in addition to the default ignores.
 
 ```bash
 fcat . -c --exclude-dir ./docs
-```
-
-**5. Include Everything**
-
-Bundle *all* files in the project, including the contents of `.git` and `target`, and copy it to the clipboard.
-
-```bash
-fcat . -c --no-default-ignores
 ```
 
 ## Output Format

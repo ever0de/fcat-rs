@@ -116,3 +116,50 @@ fn test_single_file_bundling() {
 
     fs::remove_file(output_file).unwrap();
 }
+
+#[test]
+fn test_multiple_paths_bundling() {
+    let test_dir = TestDir::new("fcat_test_multiple_paths");
+    let output_file = env::temp_dir().join("fcat_test_multiple_output.txt");
+
+    let file_a = test_dir.path().join("file_a.txt");
+    fs::write(&file_a, "content of file A").unwrap();
+
+    let subdir = test_dir.path().join("subdir");
+    fs::create_dir(&subdir).unwrap();
+    let file_b = subdir.join("file_b.txt");
+    fs::write(&file_b, "content of file B").unwrap();
+
+    let file_c = test_dir.path().join("file_c.txt");
+    fs::write(&file_c, "content of file C (should be ignored)").unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_fcat"))
+        .args([
+            file_a.to_str().unwrap(),
+            file_b.to_str().unwrap(),
+            "--output-file",
+            output_file.to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to execute fcat command");
+
+    assert!(status.success(), "fcat command did not exit successfully");
+    assert!(output_file.exists(), "Output file was not created");
+
+    let output_content = fs::read_to_string(&output_file).unwrap();
+
+    assert!(
+        output_content.contains("content of file A"),
+        "Content of file_a.txt is missing"
+    );
+    assert!(
+        output_content.contains("content of file B"),
+        "Content of file_b.txt is missing"
+    );
+    assert!(
+        !output_content.contains("content of file C"),
+        "Content from the ignored file_c.txt was incorrectly included"
+    );
+
+    fs::remove_file(output_file).unwrap();
+}
