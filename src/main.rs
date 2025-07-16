@@ -1,6 +1,8 @@
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use arboard::Clipboard;
 use async_recursion::async_recursion;
 use clap::Parser;
 use rlimit::Resource;
@@ -31,6 +33,7 @@ struct Args {
     exclude_dir: Option<PathBuf>,
 
     /// The path to the output file where all content will be bundled.
+    /// This option is ignored when --clipboard is used.
     #[arg(short, long, default_value = "bundler.txt")]
     output_file: PathBuf,
 
@@ -40,6 +43,10 @@ struct Args {
     /// unwanted files. Use this flag to include them in the search.
     #[arg(long)]
     no_default_ignores: bool,
+
+    /// Copy the output directly to the clipboard instead of a file.
+    #[arg(short, long, conflicts_with = "output_file")]
+    clipboard: bool,
 }
 
 #[derive(Clone)]
@@ -82,21 +89,36 @@ async fn main() -> eyre::Result<()> {
 
     let start = Instant::now();
 
-    let output_file_path = args.output_file.clone();
-    let writer_task = tokio::spawn(async move {
-        let mut output_file = File::create(&output_file_path)
-            .await
-            .expect("Failed to create output file");
+    let writer_task = if args.clipboard {
+        tokio::spawn(async move {
+            let mut full_content = String::new();
+            while let Some((path, content)) = rx.recv().await {
+                writeln!(&mut full_content, "<{}>", path.display())?;
+                writeln!(&mut full_content, "{content}")?;
+                writeln!(&mut full_content, "<{}/>\n\n", path.display())?;
+            }
+            let mut clipboard = Clipboard::new()?;
+            clipboard.set_text(full_content)?;
+            Ok::<(), eyre::Report>(())
+        })
+    } else {
+        let output_file_path = args.output_file.clone();
+        tokio::spawn(async move {
+            let mut output_file = File::create(&output_file_path)
+                .await
+                .expect("Failed to create output file");
 
-        while let Some((path, content)) = rx.recv().await {
-            let header = format!("<{}>\n", path.display());
-            let footer = format!("\n<{}/>\n\n", path.display());
+            while let Some((path, content)) = rx.recv().await {
+                let header = format!("<{}>\n", path.display());
+                let footer = format!("\n<{}/>\n\n", path.display());
 
-            output_file.write_all(header.as_bytes()).await.unwrap();
-            output_file.write_all(content.as_bytes()).await.unwrap();
-            output_file.write_all(footer.as_bytes()).await.unwrap();
-        }
-    });
+                output_file.write_all(header.as_bytes()).await.unwrap();
+                output_file.write_all(content.as_bytes()).await.unwrap();
+                output_file.write_all(footer.as_bytes()).await.unwrap();
+            }
+            Ok::<(), eyre::Report>(())
+        })
+    };
 
     let mut reader_tasks = JoinSet::new();
     reader_tasks.spawn(process_path_recursively(
@@ -113,13 +135,20 @@ async fn main() -> eyre::Result<()> {
 
     drop(tx);
 
-    writer_task.await?;
+    writer_task.await??;
 
-    println!(
-        "'{}' 파일 생성이 완료되었습니다. (소요 시간: {:.2?})",
-        args.output_file.display(),
-        start.elapsed()
-    );
+    if args.clipboard {
+        println!(
+            "Successfully copied to clipboard. (took: {:.2?})",
+            start.elapsed()
+        );
+    } else {
+        println!(
+            "Successfully created '{}'. (took: {:.2?})",
+            args.output_file.display(),
+            start.elapsed()
+        );
+    }
 
     Ok(())
 }

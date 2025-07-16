@@ -1,6 +1,6 @@
 # fcat
 
-`fcat` is a command-line utility that recursively scans a directory and consolidates the contents of all found files into a single text file.
+`fcat` is a command-line utility that recursively scans a directory and consolidates the contents of all found files into a single text file or directly to your clipboard.
 
 It's designed to make it easy to gather project context, create source code archives, or generate project overviews. Its primary use case is to quickly create a single context file that can be pasted into a prompt for a Large Language Model (LLM), providing the AI with the full context of a project.
 
@@ -21,7 +21,8 @@ Alternatively, you can build it from the source code:
     cd fcat
     ```
 
-2.  Build the release binary:
+2.  Build and install the binary:
+
     ```bash
     cargo install --path .
     ```
@@ -40,6 +41,7 @@ fcat [OPTIONS]
 | ---------------------- | ----- | ------------------------------------------------------------------ | ------------- |
 | `--target-dir`         | `-t`  | The target directory to scan.                                      | `.`           |
 | `--output-file`        | `-o`  | The path for the output file.                                      | `bundler.txt` |
+| `--clipboard`          | `-c`  | Copy the output directly to the clipboard instead of a file.       | (disabled)    |
 | `--exclude-dir`        | `-e`  | A specific directory to exclude from the scan.                     | (none)        |
 | `--no-default-ignores` |       | Disables the default ignore list (includes `.git`, `target`, etc.). | (disabled)    |
 | `--help`               | `-h`  | Print help information.                                            |               |
@@ -47,49 +49,57 @@ fcat [OPTIONS]
 
 ### Examples
 
-1. Generate AI Context for a Project
+**1. Copy AI Context Directly to Clipboard**
 
-This is the most common use case. Run this command in your project's root directory. It will create a `bundler.txt` file. Open it, copy the entire contents, and paste it into your LLM prompt.
+This is the most common and recommended use case. Run this command in your project's root directory. It will bundle the project's contents and copy the result directly to your clipboard.
+
+Just paste (`Ctrl+V` or `Cmd+V`) into your LLM prompt. No intermediate file needed.
+
+```bash
+fcat --clipboard
+```
+*Short version:*
+```bash
+fcat -c
+```
+
+**2. Generate an Output File**
+
+If you prefer to save the context to a file, simply run `fcat` without any flags. This will create a `bundler.txt` file in your current directory.
 
 ```bash
 fcat
 ```
 
-2. Specify a Target and Output
+**3. Specify a Target and Output File**
 
-Bundle all files from the `src` directory and save the result to `source_code.txt`.
-
-```bash
-fcat --target-dir ./src --output-file source_code.txt
-```
-
-*Short version:*
+Bundle all files from the `src` directory and save the result to a custom file named `source_code.txt`.
 
 ```bash
 fcat -t ./src -o source_code.txt
 ```
 
-3. Exclude an Additional Directory
+**4. Exclude an Additional Directory**
 
 Bundle the project but also ignore the `docs` folder.
 
 ```bash
-fcat --exclude-dir ./docs
+fcat -c --exclude-dir ./docs
 ```
 
-4. Include Everything
+**5. Include Everything**
 
-Bundle *all* files in the project, including the contents of `.git` and `target`, by disabling the default ignores.
+Bundle *all* files in the project, including the contents of `.git` and `target`, and copy it to the clipboard.
 
 ```bash
-fcat --no-default-ignores
+fcat -c --no-default-ignores
 ```
 
 ## Output Format
 
 `fcat` wraps the content of each file with a simple header and footer indicating the file's path. This makes the resulting bundle easy to read and parse.
 
-**Example `bundler.txt`:**
+**Example output:**
 
 ```text
 <src/main.rs>
