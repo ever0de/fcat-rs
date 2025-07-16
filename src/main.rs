@@ -1,0 +1,191 @@
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use async_recursion::async_recursion;
+use clap::Parser;
+use rlimit::Resource;
+use tokio::fs::{self, File};
+use tokio::io::AsyncWriteExt;
+use tokio::sync::{Semaphore, mpsc};
+use tokio::task::JoinSet;
+use tokio::time::Instant;
+
+const CONCURRENT_TASKS: usize = 32768;
+const DEFAULT_IGNORES: &[&str] = &[".git", "target"];
+
+/// A fast, asynchronous tool to recursively bundle file contents into a single text file.
+#[derive(Parser, Debug, Clone)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    /// The target directory to start the recursive search from.
+    ///
+    /// Defaults to the current working directory (".").
+    #[arg(short, long, default_value = ".")]
+    target_dir: PathBuf,
+
+    /// A specific directory path to exclude from the search.
+    ///
+    /// Any files or subdirectories within this path will be ignored, in addition to
+    /// the default ignores.
+    #[arg(short, long, value_name = "DIR")]
+    exclude_dir: Option<PathBuf>,
+
+    /// The path to the output file where all content will be bundled.
+    #[arg(short, long, default_value = "bundler.txt")]
+    output_file: PathBuf,
+
+    /// Disables the default ignore list (e.g., .git, target).
+    ///
+    /// By default, common development directories are ignored to prevent bundling
+    /// unwanted files. Use this flag to include them in the search.
+    #[arg(long)]
+    no_default_ignores: bool,
+}
+
+#[derive(Clone)]
+struct AppContext {
+    exclude_dir: Option<PathBuf>,
+    no_default_ignores: bool,
+    semaphore: Arc<Semaphore>,
+}
+
+type FileData = (PathBuf, String);
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
+
+    let args = Args::parse();
+
+    rlimit::increase_nofile_limit(u64::MAX).expect("failed during increasing NOFILE rlimit");
+
+    let nofile = rlimit::getrlimit(Resource::NOFILE).expect("cannot query rlimit");
+    if nofile.0 < 1024 || nofile.1 < 1024 {
+        eprintln!(
+            "warning: NOFILE resource limit is low(={nofile:?}), run `ulimit -n 65536` and try again if panic occurs"
+        );
+    }
+
+    let exclude_dir_abs = if let Some(dir) = args.exclude_dir {
+        Some(fs::canonicalize(dir).await?)
+    } else {
+        None
+    };
+
+    let context = AppContext {
+        exclude_dir: exclude_dir_abs,
+        no_default_ignores: args.no_default_ignores,
+        semaphore: Arc::new(Semaphore::new(CONCURRENT_TASKS)),
+    };
+
+    let (tx, mut rx) = mpsc::channel::<FileData>(CONCURRENT_TASKS);
+
+    let start = Instant::now();
+
+    let output_file_path = args.output_file.clone();
+    let writer_task = tokio::spawn(async move {
+        let mut output_file = File::create(&output_file_path)
+            .await
+            .expect("Failed to create output file");
+
+        while let Some((path, content)) = rx.recv().await {
+            let header = format!("<{}>\n", path.display());
+            let footer = format!("\n<{}/>\n\n", path.display());
+
+            output_file.write_all(header.as_bytes()).await.unwrap();
+            output_file.write_all(content.as_bytes()).await.unwrap();
+            output_file.write_all(footer.as_bytes()).await.unwrap();
+        }
+    });
+
+    let mut reader_tasks = JoinSet::new();
+    reader_tasks.spawn(process_path_recursively(
+        context,
+        args.target_dir,
+        tx.clone(),
+    ));
+
+    while let Some(res) = reader_tasks.join_next().await {
+        if let Err(e) = res {
+            eprintln!("[Error] A reader task panicked: {e}");
+        }
+    }
+
+    drop(tx);
+
+    writer_task.await?;
+
+    println!(
+        "'{}' 파일 생성이 완료되었습니다. (소요 시간: {:.2?})",
+        args.output_file.display(),
+        start.elapsed()
+    );
+
+    Ok(())
+}
+
+#[async_recursion]
+async fn process_path_recursively(
+    ctx: AppContext,
+    path: PathBuf,
+    tx: mpsc::Sender<FileData>,
+) -> eyre::Result<()> {
+    if !ctx.no_default_ignores {
+        if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
+            if DEFAULT_IGNORES.contains(&file_name) {
+                return Ok(());
+            }
+        }
+    }
+
+    if let Some(excluded) = &ctx.exclude_dir {
+        if let Ok(current_abs) = fs::canonicalize(&path).await {
+            if current_abs.starts_with(excluded) {
+                return Ok(());
+            }
+        }
+    }
+
+    let _permit = ctx.semaphore.acquire().await.expect("Semaphore closed");
+
+    let metadata = fs::metadata(&path).await.map_err(|e| {
+        eprintln!(
+            "[Error] Could not read metadata for {}: {}",
+            path.display(),
+            e
+        );
+        eyre::eyre!("Failed to read metadata for {}: {}", path.display(), e)
+    })?;
+
+    if metadata.is_dir() {
+        let mut entries = fs::read_dir(path).await?;
+        let mut tasks = JoinSet::new();
+
+        while let Some(entry) = entries.next_entry().await? {
+            tasks.spawn(process_path_recursively(
+                ctx.clone(),
+                entry.path(),
+                tx.clone(),
+            ));
+        }
+
+        while let Some(res) = tasks.join_next().await {
+            if let Err(e) = res {
+                eprintln!("[Error] A sub-task panicked: {e}");
+            }
+        }
+    } else if metadata.is_file() {
+        match fs::read_to_string(&path).await {
+            Ok(content) => {
+                if tx.send((path, content)).await.is_err() {
+                    eprintln!("[Error] Failed to send file data to writer: channel closed.");
+                }
+            }
+            Err(e) => {
+                eprintln!("[Warning] Skipping file {}: {}", path.display(), e);
+            }
+        }
+    }
+
+    Ok(())
+}
