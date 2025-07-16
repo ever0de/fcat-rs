@@ -8,9 +8,7 @@ license = "Apache-2.0"
 [dependencies]
 tokio = { version = "1.4", features = ["full"] }
 clap = { version = "4.5", features = ["derive"] }
-clap_complete = "4"
 async-recursion = "1"
-unicode-normalization = "0.1"
 rlimit = "0.10"
 eyre = "0.6"
 color-eyre = "0.6"
