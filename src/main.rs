@@ -5,6 +5,8 @@ use std::sync::Arc;
 use arboard::Clipboard;
 use async_recursion::async_recursion;
 use clap::Parser;
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use once_cell::sync::Lazy;
 use rlimit::Resource;
 use tokio::fs::{self, File};
 use tokio::io::AsyncWriteExt;
@@ -13,7 +15,29 @@ use tokio::task::JoinSet;
 use tokio::time::Instant;
 
 const CONCURRENT_TASKS: usize = 32768;
-const DEFAULT_IGNORES: &[&str] = &[".git", "target"];
+const DEFAULT_IGNORES: &[&str] = &[
+    // fcat
+    "**/bundler.txt",
+    // license
+    "**/LICENSE*",
+    // git
+    "**/.git",
+    "**/.gitignore",
+    // rust
+    "**/target",
+    "**/Cargo.lock",
+    // node
+    "**/node_modules",
+    "**/dist",
+];
+
+static IGNORE_SET: Lazy<GlobSet> = Lazy::new(|| {
+    let mut builder = GlobSetBuilder::new();
+    for pattern in DEFAULT_IGNORES {
+        builder.add(Glob::new(pattern).expect("Failed to compile glob pattern"));
+    }
+    builder.build().expect("Failed to build glob set")
+});
 
 /// A fast, asynchronous tool to recursively bundle file contents into a single text file.
 #[derive(Parser, Debug, Clone)]
@@ -159,12 +183,8 @@ async fn process_path_recursively(
     path: PathBuf,
     tx: mpsc::Sender<FileData>,
 ) -> eyre::Result<()> {
-    if !ctx.no_default_ignores {
-        if let Some(file_name) = path.file_name().and_then(|s| s.to_str()) {
-            if DEFAULT_IGNORES.contains(&file_name) {
-                return Ok(());
-            }
-        }
+    if !ctx.no_default_ignores && IGNORE_SET.is_match(&path) {
+        return Ok(());
     }
 
     if let Some(excluded) = &ctx.exclude_dir {
