@@ -43,11 +43,8 @@ static IGNORE_SET: Lazy<GlobSet> = Lazy::new(|| {
 #[derive(Parser, Debug, Clone)]
 #[command(author, version, about, long_about = None)]
 struct Args {
-    /// The target directory to start the recursive search from.
-    ///
-    /// Defaults to the current working directory (".").
-    #[arg(short, long, default_value = ".")]
-    target_dir: PathBuf,
+    /// The path to the target directory or file.
+    path: PathBuf,
 
     /// A specific directory path to exclude from the search.
     ///
@@ -145,11 +142,7 @@ async fn main() -> eyre::Result<()> {
     };
 
     let mut reader_tasks = JoinSet::new();
-    reader_tasks.spawn(process_path_recursively(
-        context,
-        args.target_dir,
-        tx.clone(),
-    ));
+    reader_tasks.spawn(process_path_recursively(context, args.path, tx.clone()));
 
     while let Some(res) = reader_tasks.join_next().await {
         if let Err(e) = res {

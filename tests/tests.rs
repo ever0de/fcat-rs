@@ -29,9 +29,9 @@ impl Drop for TestDir {
 }
 
 #[test]
-fn test_file_bundling_with_all_ignores() {
-    let test_dir = TestDir::new("fcat_test_basic");
-    let output_file = env::temp_dir().join("fcat_test_output.txt");
+fn test_directory_bundling_with_all_ignores() {
+    let test_dir = TestDir::new("fcat_test_dir");
+    let output_file = env::temp_dir().join("fcat_test_dir_output.txt");
 
     let subdir = test_dir.path().join("src");
     fs::create_dir(&subdir).unwrap();
@@ -48,7 +48,6 @@ fn test_file_bundling_with_all_ignores() {
 
     let status = Command::new(env!("CARGO_BIN_EXE_fcat"))
         .args([
-            "--target-dir",
             test_dir.path().to_str().unwrap(),
             "--output-file",
             output_file.to_str().unwrap(),
@@ -78,6 +77,41 @@ fn test_file_bundling_with_all_ignores() {
     assert!(
         !output_content.contains("ignored content"),
         "Content from user-excluded directory was not ignored"
+    );
+
+    fs::remove_file(output_file).unwrap();
+}
+
+#[test]
+fn test_single_file_bundling() {
+    let test_dir = TestDir::new("fcat_test_single_file");
+    let output_file = env::temp_dir().join("fcat_test_single_output.txt");
+
+    let target_file = test_dir.path().join("file_a.txt");
+    fs::write(&target_file, "single file content").unwrap();
+    fs::write(test_dir.path().join("file_b.txt"), "other content").unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_fcat"))
+        .args([
+            target_file.to_str().unwrap(),
+            "--output-file",
+            output_file.to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to execute fcat command");
+
+    assert!(status.success(), "fcat command did not exit successfully");
+    assert!(output_file.exists(), "Output file was not created");
+
+    let output_content = fs::read_to_string(&output_file).unwrap();
+
+    assert!(
+        output_content.contains("single file content"),
+        "Content of the target file is missing"
+    );
+    assert!(
+        !output_content.contains("other content"),
+        "Content from non-target file was incorrectly included"
     );
 
     fs::remove_file(output_file).unwrap();

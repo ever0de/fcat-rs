@@ -1,6 +1,6 @@
 # fcat
 
-`fcat` is a command-line utility that recursively scans a directory and consolidates the contents of all found files into a single text file or directly to your clipboard.
+`fcat` is a command-line utility that recursively scans a directory or processes a single file and consolidates the contents of all found files into a single text file or directly to your clipboard.
 
 It's designed to make it easy to gather project context, create source code archives, or generate project overviews. Its primary use case is to quickly create a single context file that can be pasted into a prompt for a Large Language Model (LLM), providing the AI with the full context of a project.
 
@@ -32,14 +32,19 @@ Alternatively, you can build it from the source code:
 The basic command structure is simple:
 
 ```bash
-fcat [OPTIONS]
+fcat [OPTIONS] <PATH>
 ```
+
+### Arguments
+
+| Argument | Description                                                                                              |
+| -------- | -------------------------------------------------------------------------------------------------------- |
+| `<PATH>` | The path to the target directory or file. If a directory, scans recursively. If a file, processes only it. |
 
 ### Options
 
 | Option                 | Short | Description                                                        | Default       |
 | ---------------------- | ----- | ------------------------------------------------------------------ | ------------- |
-| `--target-dir`         | `-t`  | The target directory to scan.                                      | `.`           |
 | `--output-file`        | `-o`  | The path for the output file.                                      | `bundler.txt` |
 | `--clipboard`          | `-c`  | Copy the output directly to the clipboard instead of a file.       | (disabled)    |
 | `--exclude-dir`        | `-e`  | A specific directory to exclude from the scan.                     | (none)        |
@@ -49,42 +54,50 @@ fcat [OPTIONS]
 
 ### Examples
 
-**1. Copy AI Context Directly to Clipboard**
+**1. Copy Current Directory to Clipboard**
 
-This is the most common and recommended use case. Run this command in your project's root directory. It will bundle the project's contents and copy the result directly to your clipboard.
+This is the most common use case. Run this command in your project's root directory. It will bundle the project's contents and copy the result directly to your clipboard.
 
 Just paste (`Ctrl+V` or `Cmd+V`) into your LLM prompt. No intermediate file needed.
 
 ```bash
-fcat --clipboard
+fcat . --clipboard
 ```
+
 *Short version:*
+
 ```bash
-fcat -c
+fcat . -c
 ```
 
 **2. Generate an Output File**
 
-If you prefer to save the context to a file, simply run `fcat` without any flags. This will create a `bundler.txt` file in your current directory.
+If you prefer to save the context to a file, run `fcat .`. This will create a `bundler.txt` file in your current directory.
 
 ```bash
-fcat
+fcat .
 ```
 
-**3. Specify a Target and Output File**
+**3. Bundle a Specific Directory or File**
 
-Bundle all files from the `src` directory and save the result to a custom file named `source_code.txt`.
+Bundle all files from the `src` directory and save the result to `source_code.txt`:
 
 ```bash
-fcat -t ./src -o source_code.txt
+fcat ./src -o source_code.txt
+```
+
+Or, bundle only a single file:
+
+```bash
+fcat src/main.rs -o main_only.txt
 ```
 
 **4. Exclude an Additional Directory**
 
-Bundle the project but also ignore the `docs` folder.
+Bundle the project but also ignore the `docs` folder, in addition to the default ignores.
 
 ```bash
-fcat -c --exclude-dir ./docs
+fcat . -c --exclude-dir ./docs
 ```
 
 **5. Include Everything**
@@ -92,7 +105,7 @@ fcat -c --exclude-dir ./docs
 Bundle *all* files in the project, including the contents of `.git` and `target`, and copy it to the clipboard.
 
 ```bash
-fcat -c --no-default-ignores
+fcat . -c --no-default-ignores
 ```
 
 ## Output Format
