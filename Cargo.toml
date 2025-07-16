@@ -2,6 +2,8 @@
 name = "fcat"
 version = "0.1.0"
 edition = "2024"
+authors = ["Jiseok CHOI <jiseok.dev@gmail.com>"]
+license = "Apache-2.0"
 
 [dependencies]
 tokio = { version = "1.4", features = ["full"] }
