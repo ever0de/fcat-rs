@@ -163,3 +163,48 @@ fn test_multiple_paths_bundling() {
 
     fs::remove_file(output_file).unwrap();
 }
+
+#[test]
+fn test_default_ignores_target_directory() {
+    let test_dir = TestDir::new("fcat_test_target_ignore");
+    let output_file = env::temp_dir().join("fcat_test_target_output.txt");
+
+    let src_dir = test_dir.path().join("src");
+    fs::create_dir(&src_dir).unwrap();
+    fs::write(src_dir.join("main.rs"), "fn main() {}").unwrap();
+
+    let target_dir = test_dir.path().join("target");
+    fs::create_dir_all(&target_dir).unwrap();
+    let target_subdir = target_dir.join("debug");
+    fs::create_dir_all(&target_subdir).unwrap();
+    fs::write(
+        target_subdir.join("some_file.rs"),
+        "some rust file in target",
+    )
+    .unwrap();
+
+    let status = Command::new(env!("CARGO_BIN_EXE_fcat"))
+        .args([
+            test_dir.path().to_str().unwrap(),
+            "--output-file",
+            output_file.to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to execute fcat command");
+
+    assert!(status.success(), "fcat command did not exit successfully");
+    assert!(output_file.exists(), "Output file was not created");
+
+    let output_content = fs::read_to_string(&output_file).unwrap();
+
+    assert!(
+        output_content.contains("fn main() {}"),
+        "Content of src/main.rs is missing"
+    );
+    assert!(
+        !output_content.contains("some rust file in target"),
+        "Content from target directory was not ignored"
+    );
+
+    fs::remove_file(output_file).unwrap();
+}

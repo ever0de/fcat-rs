@@ -21,14 +21,14 @@ const DEFAULT_IGNORES: &[&str] = &[
     // license
     "**/LICENSE*",
     // git
-    "**/.git",
+    "**/.git/**",
     "**/.gitignore",
     // rust
-    "**/target",
+    "**/target/**",
     "**/Cargo.lock",
     // node
-    "**/node_modules",
-    "**/dist",
+    "**/node_modules/**",
+    "**/dist/**",
 ];
 
 static IGNORE_SET: Lazy<GlobSet> = Lazy::new(|| {
