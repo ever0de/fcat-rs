@@ -17,8 +17,8 @@ Alternatively, you can build it from the source code:
 1.  Clone the repository:
 
     ```bash
-    git clone https://github.com/ever0de/fcat.git
-    cd fcat
+    git clone https://github.com/ever0de/fcat-rs.git
+    cd fcat-rs
     ```
 
 2.  Build and install the binary:
