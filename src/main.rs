@@ -1,6 +1,4 @@
-use std::fmt::Write;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{fmt::Write, path::PathBuf, sync::Arc};
 
 use arboard::Clipboard;
 use async_recursion::async_recursion;
@@ -8,11 +6,13 @@ use clap::Parser;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use once_cell::sync::Lazy;
 use rlimit::Resource;
-use tokio::fs::{self, File};
-use tokio::io::AsyncWriteExt;
-use tokio::sync::{Semaphore, mpsc};
-use tokio::task::JoinSet;
-use tokio::time::Instant;
+use tokio::{
+    fs::{self, File},
+    io::AsyncWriteExt,
+    sync::{Semaphore, mpsc},
+    task::JoinSet,
+    time::Instant,
+};
 
 const CONCURRENT_TASKS: usize = 32768;
 const DEFAULT_IGNORES: &[&str] = &[
